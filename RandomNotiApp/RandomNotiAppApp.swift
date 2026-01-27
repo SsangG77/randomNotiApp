@@ -9,9 +9,17 @@ import SwiftUI
 
 @main
 struct RandomNotiAppApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                // 앱이 활성화될 때 알림 다시 스케줄링
+                NotificationManager.shared.rescheduleAllNotifications()
+            }
         }
     }
 }
