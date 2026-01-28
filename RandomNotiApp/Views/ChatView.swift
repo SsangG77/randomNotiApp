@@ -10,18 +10,14 @@ struct ChatView: View {
     let itemId: UUID
     @ObservedObject private var manager = NotificationManager.shared
     @State private var inputText: String = ""
-    @State private var currentTime = Date()
     @FocusState private var isInputFocused: Bool
-
-    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var item: NotificationItem? {
         manager.items.first { $0.id == itemId }
     }
 
-    // 현재 시간 이전의 메시지만 표시
-    private var visibleMessages: [Message] {
-        item?.messages.filter { $0.timestamp <= currentTime } ?? []
+    private var messages: [Message] {
+        item?.messages ?? []
     }
 
     var body: some View {
@@ -33,11 +29,12 @@ struct ChatView: View {
 
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(visibleMessages) { message in
+                            ForEach(messages) { message in
                                 MessageBubble(
                                     message: message,
                                     screenHeight: screenHeight,
-                                    senderName: item?.title ?? ""
+                                    senderName: item?.title ?? "",
+                                    profileImageData: item?.profileImageData
                                 )
                                 .id(message.id)
                             }
@@ -45,7 +42,7 @@ struct ChatView: View {
                         .padding()
                     }
                 }
-                .onChange(of: visibleMessages.count) { _, _ in
+                .onChange(of: messages.count) { _, _ in
                     scrollToBottom(proxy: proxy)
                 }
 
@@ -91,9 +88,6 @@ struct ChatView: View {
         .onTapGesture {
             isInputFocused = false
         }
-        .onReceive(timer) { _ in
-            currentTime = Date()
-        }
     }
 
     private func sendMessage() {
@@ -104,7 +98,7 @@ struct ChatView: View {
     }
 
     private func scrollToBottom(proxy: ScrollViewProxy) {
-        if let lastMessage = visibleMessages.last {
+        if let lastMessage = messages.last {
             withAnimation {
                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
             }
@@ -117,6 +111,7 @@ struct MessageBubble: View {
     let message: Message
     let screenHeight: CGFloat
     let senderName: String
+    let profileImageData: Data?
 
     @State private var bubblePosition: CGFloat = 0.5
 
@@ -160,15 +155,24 @@ struct MessageBubble: View {
                 Spacer(minLength: 60)
             } else {
                 // 상대방 프로필 이미지
-                Circle()
-                    .fill(Color.blue)
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Text(String(senderName.prefix(1)))
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                    )
+                if let imageData = profileImageData,
+                   let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 28, height: 28)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 28, height: 28)
+                        .overlay(
+                            Text(String(senderName.prefix(1)))
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.white)
+                        )
+                }
             }
 
             Text(message.content)

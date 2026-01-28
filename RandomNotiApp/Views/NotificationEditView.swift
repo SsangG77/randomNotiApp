@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 enum EditMode {
     case add
@@ -19,6 +20,8 @@ struct NotificationEditView: View {
     @State private var minInterval: Int = 5
     @State private var maxInterval: Int = 30
     @State private var isEnabled: Bool = true
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var profileImageData: Data?
 
     private var isEditing: Bool {
         if case .edit = mode { return true }
@@ -33,8 +36,44 @@ struct NotificationEditView: View {
     var body: some View {
         NavigationView {
             Form {
-                // 상대방 이름
+                // 상대방 정보
                 Section(header: Text("상대방 정보")) {
+                    // 프로필 이미지
+                    HStack {
+                        Spacer()
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            if let imageData = profileImageData,
+                               let uiImage = UIImage(data: imageData) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 80, height: 80)
+                                    .clipShape(Circle())
+                            } else {
+                                Circle()
+                                    .fill(Color.blue)
+                                    .frame(width: 80, height: 80)
+                                    .overlay(
+                                        Image(systemName: "camera.fill")
+                                            .foregroundColor(.white)
+                                            .font(.title2)
+                                    )
+                            }
+                        }
+                        .onChange(of: selectedPhoto) { _, newValue in
+                            Task {
+                                if let data = try? await newValue?.loadTransferable(type: Data.self) {
+                                    if let uiImage = UIImage(data: data),
+                                       let compressed = uiImage.jpegData(compressionQuality: 0.5) {
+                                        profileImageData = compressed
+                                    }
+                                }
+                            }
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 8)
+
                     TextField("이름 (예: 민지)", text: $title)
                 }
 
@@ -125,6 +164,7 @@ struct NotificationEditView: View {
     private func loadExistingItem() {
         guard let item = existingItem else { return }
         title = item.title
+        profileImageData = item.profileImageData
         minInterval = item.minInterval
         maxInterval = item.maxInterval
         isEnabled = item.isEnabled
@@ -134,6 +174,7 @@ struct NotificationEditView: View {
         if let existing = existingItem {
             var updated = existing
             updated.title = title
+            updated.profileImageData = profileImageData
             updated.minInterval = minInterval
             updated.maxInterval = maxInterval
             updated.isEnabled = isEnabled
@@ -141,6 +182,7 @@ struct NotificationEditView: View {
         } else {
             let newItem = NotificationItem(
                 title: title,
+                profileImageData: profileImageData,
                 minInterval: minInterval,
                 maxInterval: maxInterval,
                 isEnabled: isEnabled

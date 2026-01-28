@@ -83,9 +83,7 @@ struct NotificationRowView: View {
     @ObservedObject private var manager = NotificationManager.shared
 
     private var lastMessageText: String {
-        // 현재 시간 이전의 메시지만 표시
-        let visibleMessages = item.messages.filter { $0.timestamp <= Date() }
-        if let lastMessage = visibleMessages.last {
+        if let lastMessage = item.messages.last {
             return lastMessage.isFromUser ? "나: \(lastMessage.content)" : lastMessage.content
         }
         return "대화를 시작해보세요"
@@ -102,15 +100,25 @@ struct NotificationRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             // 프로필 아이콘
-            Circle()
-                .fill(item.isEnabled ? Color.blue : Color.gray)
-                .frame(width: 50, height: 50)
-                .overlay(
-                    Text(String(item.title.prefix(1)))
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                )
+            if let imageData = item.profileImageData,
+               let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 50, height: 50)
+                    .clipShape(Circle())
+                    .opacity(item.isEnabled ? 1.0 : 0.5)
+            } else {
+                Circle()
+                    .fill(item.isEnabled ? Color.blue : Color.gray)
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Text(String(item.title.prefix(1)))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    )
+            }
 
             // 정보
             VStack(alignment: .leading, spacing: 4) {

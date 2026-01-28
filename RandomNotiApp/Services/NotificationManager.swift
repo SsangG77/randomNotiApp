@@ -126,17 +126,13 @@ class NotificationManager: NSObject, ObservableObject {
             let messageContent = await generateAIMessage(for: items[index])
 
             await MainActor.run {
-                // 메시지를 채팅에 바로 추가 (알림 도착 시간으로 타임스탬프 설정)
+                // pendingMessage에 저장 (아직 채팅에 추가하지 않음)
                 guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return }
-                let aiMessage = Message(
+                items[idx].pendingMessage = PendingMessage(
                     content: messageContent,
-                    isFromUser: false,
-                    timestamp: Date().addingTimeInterval(seconds)
+                    scheduledTime: Date().addingTimeInterval(seconds)
                 )
-                items[idx].messages.append(aiMessage)
                 items[idx].isWaitingForReply = true
-                items[idx].unreadCount += 1
-                updateBadge()
             }
 
             // 알림 내용 설정
@@ -144,7 +140,7 @@ class NotificationManager: NSObject, ObservableObject {
             content.title = self.items[index].title
             content.body = messageContent
             content.sound = .default
-            content.badge = NSNumber(value: self.totalUnreadCount)
+            content.badge = NSNumber(value: self.totalUnreadCount + 1)
 
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
             let request = UNNotificationRequest(
@@ -156,6 +152,22 @@ class NotificationManager: NSObject, ObservableObject {
             try? await UNUserNotificationCenter.current().add(request)
             print("\(items[index].title): \(randomMinutes)분 후 알림 예약")
         }
+    }
+
+    // MARK: - 예약된 메시지를 채팅에 추가
+    func deliverPendingMessage(for itemId: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == itemId }),
+              let pending = items[index].pendingMessage else { return }
+
+        let message = Message(
+            content: pending.content,
+            isFromUser: false,
+            timestamp: Date()
+        )
+        items[index].messages.append(message)
+        items[index].pendingMessage = nil
+        items[index].unreadCount += 1
+        updateBadge()
     }
 
     // MARK: - AI 메시지 생성
@@ -181,10 +193,31 @@ class NotificationManager: NSObject, ObservableObject {
 
     // 앱 시작 시 대기 중이 아닌 아이템들 알림 재스케줄링
     func rescheduleAllNotifications() {
+        // 시간이 지난 pendingMessage 처리
+        processPendingMessages()
+
         for item in items where item.isEnabled && !item.isWaitingForReply {
             scheduleNextNotification(for: item.id)
         }
         updateBadge()
+    }
+
+    // 시간이 지난 pendingMessage들을 채팅에 추가
+    private func processPendingMessages() {
+        let now = Date()
+        for index in items.indices {
+            if let pending = items[index].pendingMessage,
+               pending.scheduledTime <= now {
+                let message = Message(
+                    content: pending.content,
+                    isFromUser: false,
+                    timestamp: pending.scheduledTime
+                )
+                items[index].messages.append(message)
+                items[index].pendingMessage = nil
+                items[index].unreadCount += 1
+            }
+        }
     }
 
     // MARK: - 뱃지 관리
@@ -210,6 +243,12 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        let identifier = response.notification.request.identifier
+        if let itemId = extractItemId(from: identifier) {
+            DispatchQueue.main.async {
+                self.deliverPendingMessage(for: itemId)
+            }
+        }
         completionHandler()
     }
 
@@ -219,6 +258,22 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        let identifier = notification.request.identifier
+        if let itemId = extractItemId(from: identifier) {
+            DispatchQueue.main.async {
+                self.deliverPendingMessage(for: itemId)
+            }
+        }
         completionHandler([.banner, .sound, .badge])
+    }
+
+    private func extractItemId(from identifier: String) -> UUID? {
+        // identifier 형식: "UUID-0"
+        let parts = identifier.split(separator: "-")
+        if parts.count >= 5 {
+            let uuidString = parts[0...4].joined(separator: "-")
+            return UUID(uuidString: uuidString)
+        }
+        return nil
     }
 }
