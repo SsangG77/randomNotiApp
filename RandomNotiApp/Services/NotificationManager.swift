@@ -103,27 +103,38 @@ class NotificationManager: NSObject, ObservableObject {
 
     // MARK: - 알림 스케줄링 (한 번에 하나씩)
     private func scheduleNextNotification(for itemId: UUID) {
-        guard let item = items.first(where: { $0.id == itemId }),
-              item.isEnabled,
-              !item.isWaitingForReply else { return }
+        guard let index = items.firstIndex(where: { $0.id == itemId }),
+              items[index].isEnabled,
+              !items[index].isWaitingForReply else { return }
 
         // 기존 알림 취소
         cancelNotifications(for: itemId)
 
         // 랜덤 간격 계산 (분 -> 초)
-        let randomMinutes = Int.random(in: item.minInterval...item.maxInterval)
+        let randomMinutes = Int.random(in: items[index].minInterval...items[index].maxInterval)
         let seconds = TimeInterval(randomMinutes * 60)
 
         // AI 메시지 생성
         Task {
-            let messageContent = await generateAIMessage(for: item)
+            let messageContent = await generateAIMessage(for: items[index])
+
+            await MainActor.run {
+                // 메시지를 채팅에 바로 추가 (알림 도착 시간으로 타임스탬프 설정)
+                guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return }
+                let aiMessage = Message(
+                    content: messageContent,
+                    isFromUser: false,
+                    timestamp: Date().addingTimeInterval(seconds)
+                )
+                items[idx].messages.append(aiMessage)
+                items[idx].isWaitingForReply = true
+            }
 
             // 알림 내용 설정
             let content = UNMutableNotificationContent()
-            content.title = item.title
+            content.title = items[index].title
             content.body = messageContent
             content.sound = .default
-            content.userInfo = ["itemId": itemId.uuidString, "messageContent": messageContent]
 
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
             let request = UNNotificationRequest(
@@ -133,7 +144,7 @@ class NotificationManager: NSObject, ObservableObject {
             )
 
             try? await UNUserNotificationCenter.current().add(request)
-            print("\(item.title): \(randomMinutes)분 후 알림 예약")
+            print("\(items[index].title): \(randomMinutes)분 후 알림 예약")
         }
     }
 
@@ -147,18 +158,6 @@ class NotificationManager: NSObject, ObservableObject {
         } else {
             return AIMessageGeneratorFallback.shared.generateMessage(name: item.title)
         }
-    }
-
-    // MARK: - 알림 수신 처리 (AI 메시지를 채팅에 추가)
-    func handleNotificationReceived(itemId: UUID, messageContent: String) {
-        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
-
-        // AI 메시지를 채팅에 추가
-        let aiMessage = Message(content: messageContent, isFromUser: false)
-        items[index].messages.append(aiMessage)
-
-        // 답변 대기 상태로 변경 (다음 알림 보내지 않음)
-        items[index].isWaitingForReply = true
     }
 
     func cancelNotifications(for itemId: UUID) {
@@ -186,14 +185,6 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let userInfo = response.notification.request.content.userInfo
-        if let itemIdString = userInfo["itemId"] as? String,
-           let itemId = UUID(uuidString: itemIdString),
-           let messageContent = userInfo["messageContent"] as? String {
-            DispatchQueue.main.async {
-                self.handleNotificationReceived(itemId: itemId, messageContent: messageContent)
-            }
-        }
         completionHandler()
     }
 
@@ -203,15 +194,6 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        // 알림이 표시될 때 메시지를 채팅에 추가
-        let userInfo = notification.request.content.userInfo
-        if let itemIdString = userInfo["itemId"] as? String,
-           let itemId = UUID(uuidString: itemIdString),
-           let messageContent = userInfo["messageContent"] as? String {
-            DispatchQueue.main.async {
-                self.handleNotificationReceived(itemId: itemId, messageContent: messageContent)
-            }
-        }
         completionHandler([.banner, .sound, .badge])
     }
 }
