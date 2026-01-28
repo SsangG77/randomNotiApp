@@ -44,31 +44,44 @@ class AIMessageGenerator {
     }
 
     private func buildPrompt(name: String, history: [Message]) -> String {
-        // 다양한 주제 랜덤 선택
+        // 다양한 주제 랜덤 선택 (질문 최소화, 일상 공유 위주)
         let topics = [
-            "Share what you're doing right now",
-            "Talk about food you ate or want to eat",
-            "Mention something random about your day",
-            "Ask a casual question about their day",
-            "Share a random thought",
-            "Talk about being tired or bored",
-            "Mention the weather or plans"
+            "Share what you're doing right now (watching YouTube, lying in bed, at cafe, etc)",
+            "Talk about food you ate - describe how it was",
+            "Share something funny that happened",
+            "React to something (헐, 대박, 아 진짜 등)",
+            "Share your current mood or feeling",
+            "Talk about a drama/show you're watching",
+            "Mention you're tired or sleepy",
+            "Share random thought without asking anything",
+            "Talk about wanting to eat something specific",
+            "Share what you did today (met friend, went shopping, etc)"
         ]
         let randomTopic = topics.randomElement() ?? "Share a random thought"
 
         var prompt = """
-        You are '\(name)', a cute Korean friend texting. Write ONE short message in Korean.
+        You are '\(name)', a Korean friend texting casually. Write ONE short message in Korean.
 
-        Style rules:
-        - Use casual speech (반말)
-        - Be slightly cute (애교) but natural
-        - Mix these expressions naturally: "ㅋㅋ", "ㅎㅎ", "~" at end of sentences
-        - Examples: "오늘 뭐했어~ ㅎㅎ", "나 지금 집이야 ㅋㅋ", "배고프다~"
+        IMPORTANT:
+        - Do NOT ask questions like "뭐해?" or "뭐하고있어?"
+        - Instead, SHARE something about yourself
+        - React, tell stories, share feelings
+
+        Style:
+        - Use 반말 (casual speech)
+        - Add "ㅋㅋ", "ㅎㅎ", "~" naturally
+        - Be slightly cute but natural
         - NO emojis
-        - Sound natural, like a real text message
-        - Don't always ask "뭐해" - be varied
+        - Keep it short (1-2 sentences)
 
-        Topic for this message: \(randomTopic)
+        Examples of good messages:
+        - "아ㅋㅋㅋ 방금 진짜 웃긴거 봤어"
+        - "나 오늘 친구 만났어~ 재밌었어 ㅎㅎ"
+        - "헐 대박 ㅋㅋ"
+        - "배고프다~ 치킨 먹고싶어"
+        - "나 지금 침대에 누워있어 ㅋㅋ"
+
+        Topic: \(randomTopic)
 
         """
 
@@ -83,10 +96,10 @@ class AIMessageGenerator {
                     prompt += "\(name): \(message.content)\n"
                 }
             }
-            prompt += "\nContinue the conversation naturally."
+            prompt += "\nRespond naturally to the conversation."
         }
 
-        prompt += "\n\(name)'s message:"
+        prompt += "\n\(name)'s message (no questions):"
 
         return prompt
     }
@@ -100,28 +113,39 @@ class AIMessageGenerator {
             "아까 버스에서 잠들뻔했어 ㅋㅋㅋ",
             "오늘 날씨 진짜 좋다~",
             "나 지금 유튜브 보는중 ㅎㅎ",
-            "아 뭐볼지 모르겠어~",
             "방금 라면 끓여먹었어 ㅋㅋ 맛있다",
             "오늘 운동 갔다왔어~ 힘들었어 ㅎㅎ",
-            "아 내일 뭐하지~",
-            // 질문
-            "요즘 뭐하고 지내~ ㅎㅎ",
-            "점심 뭐 먹었어?",
-            "주말에 뭐해~ 나랑 놀아줘 ㅋㅋ",
-            "요즘 재밌는거 있어? 추천해줘~",
-            "너 그거 봤어? 요즘 유행하는거 ㅋㅋ",
-            // 잡담
-            "아 진짜 심심하다~ ㅎㅎ",
+            "나 지금 카페야 ㅎㅎ",
+            // 감정/반응
+            "아ㅋㅋㅋㅋ 방금 진짜 웃긴거 봤어",
+            "헐 대박 ㅋㅋㅋ",
+            "아 너무 웃겨 ㅋㅋㅋㅋ",
+            "오늘 기분 좋다~ ㅎㅎ",
+            "아 짜증나 ㅋㅋ",
+            "엥 진짜?? ㅋㅋ",
+            // 이야기/근황
+            "나 오늘 친구 만났어~ 재밌었어 ㅎㅎ",
+            "아까 맛집 갔는데 진짜 맛있었어 ㅋㅋ",
+            "나 요즘 드라마 보는중~ 재밌어",
+            "오늘 쇼핑했어 ㅎㅎ 돈 많이 썼다",
+            "나 요즘 노래 이거 듣는중~",
+            "아까 산책했는데 좋더라 ㅎㅎ",
+            // 음식
             "갑자기 치킨 먹고싶어 ㅋㅋ",
-            "ㅎㅎ 갑자기 생각나서 연락했어~",
-            "심심해서 연락함 ㅋㅋ",
-            "나 지금 집이야~ 너 뭐해?",
+            "아 맛있는거 먹고싶다~",
+            "배달 시켜먹을까 고민중~",
+            "방금 디저트 먹었어 ㅎㅎ 맛있다",
+            "커피 마시고싶다~",
+            // 랜덤
+            "ㅋㅋㅋ 갑자기 생각나서~",
             "아 졸려~ ㅎㅎ",
             "오늘 하루 진짜 길었어 ㅋㅋ",
-            "배달 시켜먹을까 고민중~ 뭐가 좋을까",
-            "나 지금 카페야 ㅎㅎ",
-            "아 맛있는거 먹고싶다~",
-            "오늘 뭐했어? 나는 그냥 집에 있었어 ㅋㅋ"
+            "심심하다~ ㅎㅎ",
+            "나 지금 침대에 누워있어 ㅋㅋ",
+            "아 귀찮아~ ㅎㅎ",
+            "ㅋㅋㅋ 아무말 하고싶었어",
+            "나 오늘 늦잠잤어~",
+            "집가고싶다 ㅋㅋ"
         ]
         return messages.randomElement() ?? "ㅎㅎ 심심해~"
     }
@@ -142,28 +166,39 @@ class AIMessageGeneratorFallback {
             "아까 버스에서 잠들뻔했어 ㅋㅋㅋ",
             "오늘 날씨 진짜 좋다~",
             "나 지금 유튜브 보는중 ㅎㅎ",
-            "아 뭐볼지 모르겠어~",
             "방금 라면 끓여먹었어 ㅋㅋ 맛있다",
             "오늘 운동 갔다왔어~ 힘들었어 ㅎㅎ",
-            "아 내일 뭐하지~",
-            // 질문
-            "요즘 뭐하고 지내~ ㅎㅎ",
-            "점심 뭐 먹었어?",
-            "주말에 뭐해~ 나랑 놀아줘 ㅋㅋ",
-            "요즘 재밌는거 있어? 추천해줘~",
-            "너 그거 봤어? 요즘 유행하는거 ㅋㅋ",
-            // 잡담
-            "아 진짜 심심하다~ ㅎㅎ",
+            "나 지금 카페야 ㅎㅎ",
+            // 감정/반응
+            "아ㅋㅋㅋㅋ 방금 진짜 웃긴거 봤어",
+            "헐 대박 ㅋㅋㅋ",
+            "아 너무 웃겨 ㅋㅋㅋㅋ",
+            "오늘 기분 좋다~ ㅎㅎ",
+            "아 짜증나 ㅋㅋ",
+            "엥 진짜?? ㅋㅋ",
+            // 이야기/근황
+            "나 오늘 친구 만났어~ 재밌었어 ㅎㅎ",
+            "아까 맛집 갔는데 진짜 맛있었어 ㅋㅋ",
+            "나 요즘 드라마 보는중~ 재밌어",
+            "오늘 쇼핑했어 ㅎㅎ 돈 많이 썼다",
+            "나 요즘 노래 이거 듣는중~",
+            "아까 산책했는데 좋더라 ㅎㅎ",
+            // 음식
             "갑자기 치킨 먹고싶어 ㅋㅋ",
-            "ㅎㅎ 갑자기 생각나서 연락했어~",
-            "심심해서 연락함 ㅋㅋ",
-            "나 지금 집이야~ 너 뭐해?",
+            "아 맛있는거 먹고싶다~",
+            "배달 시켜먹을까 고민중~",
+            "방금 디저트 먹었어 ㅎㅎ 맛있다",
+            "커피 마시고싶다~",
+            // 랜덤
+            "ㅋㅋㅋ 갑자기 생각나서~",
             "아 졸려~ ㅎㅎ",
             "오늘 하루 진짜 길었어 ㅋㅋ",
-            "배달 시켜먹을까 고민중~ 뭐가 좋을까",
-            "나 지금 카페야 ㅎㅎ",
-            "아 맛있는거 먹고싶다~",
-            "오늘 뭐했어? 나는 그냥 집에 있었어 ㅋㅋ"
+            "심심하다~ ㅎㅎ",
+            "나 지금 침대에 누워있어 ㅋㅋ",
+            "아 귀찮아~ ㅎㅎ",
+            "ㅋㅋㅋ 아무말 하고싶었어",
+            "나 오늘 늦잠잤어~",
+            "집가고싶다 ㅋㅋ"
         ]
         return messages.randomElement() ?? "ㅎㅎ 심심해~"
     }

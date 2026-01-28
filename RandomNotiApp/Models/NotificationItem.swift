@@ -13,6 +13,7 @@ struct NotificationItem: Identifiable, Codable {
     var isEnabled: Bool                 // 활성화 여부
     var messages: [Message] = []        // 채팅 메시지 히스토리
     var isWaitingForReply: Bool = true  // 답변 대기 상태 (true면 알림 안 보냄)
+    var unreadCount: Int = 0            // 읽지 않은 메시지 수
     var createdAt: Date = Date()
 
     // 마지막 메시지

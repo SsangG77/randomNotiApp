@@ -83,7 +83,9 @@ struct NotificationRowView: View {
     @ObservedObject private var manager = NotificationManager.shared
 
     private var lastMessageText: String {
-        if let lastMessage = item.lastMessage {
+        // 현재 시간 이전의 메시지만 표시
+        let visibleMessages = item.messages.filter { $0.timestamp <= Date() }
+        if let lastMessage = visibleMessages.last {
             return lastMessage.isFromUser ? "나: \(lastMessage.content)" : lastMessage.content
         }
         return "대화를 시작해보세요"
@@ -100,15 +102,29 @@ struct NotificationRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             // 프로필 아이콘
-            Circle()
-                .fill(item.isEnabled ? Color.blue : Color.gray)
-                .frame(width: 50, height: 50)
-                .overlay(
-                    Text(String(item.title.prefix(1)))
-                        .font(.title2)
+            ZStack(alignment: .topTrailing) {
+                Circle()
+                    .fill(item.isEnabled ? Color.blue : Color.gray)
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Text(String(item.title.prefix(1)))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    )
+
+                // 읽지 않은 메시지 뱃지
+                if item.unreadCount > 0 {
+                    Text("\(item.unreadCount)")
+                        .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                )
+                        .padding(5)
+                        .background(Color.red)
+                        .clipShape(Circle())
+                        .offset(x: 5, y: -5)
+                }
+            }
 
             // 정보
             VStack(alignment: .leading, spacing: 4) {
@@ -116,12 +132,6 @@ struct NotificationRowView: View {
                     Text(item.title)
                         .font(.headline)
                         .foregroundColor(item.isEnabled ? .primary : .secondary)
-
-                    if item.isWaitingForReply {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 8, height: 8)
-                    }
                 }
 
                 Text(lastMessageText)

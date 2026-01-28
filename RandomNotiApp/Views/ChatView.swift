@@ -4,32 +4,49 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ChatView: View {
     let itemId: UUID
     @ObservedObject private var manager = NotificationManager.shared
     @State private var inputText: String = ""
+    @State private var currentTime = Date()
     @FocusState private var isInputFocused: Bool
+
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var item: NotificationItem? {
         manager.items.first { $0.id == itemId }
+    }
+
+    // 현재 시간 이전의 메시지만 표시
+    private var visibleMessages: [Message] {
+        item?.messages.filter { $0.timestamp <= currentTime } ?? []
     }
 
     var body: some View {
         VStack(spacing: 0) {
             // 채팅 메시지 목록
             ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(item?.messages ?? []) { message in
-                            MessageBubble(message: message)
+                GeometryReader { outerGeometry in
+                    let screenHeight = outerGeometry.size.height
+
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(visibleMessages) { message in
+                                MessageBubble(
+                                    message: message,
+                                    screenHeight: screenHeight,
+                                    senderName: item?.title ?? ""
+                                )
                                 .id(message.id)
+                            }
                         }
+                        .padding()
                     }
-                    .padding()
                 }
-                .onChange(of: item?.messages.count) { _, _ in
-                    if let lastMessage = item?.messages.last {
+                .onChange(of: visibleMessages.count) { _, _ in
+                    if let lastMessage = visibleMessages.last {
                         withAnimation {
                             proxy.scrollTo(lastMessage.id, anchor: .bottom)
                         }
@@ -65,6 +82,12 @@ struct ChatView: View {
         .onTapGesture {
             isInputFocused = false
         }
+        .onAppear {
+            manager.markAsRead(itemId: itemId)
+        }
+        .onReceive(timer) { _ in
+            currentTime = Date()
+        }
     }
 
     private func sendMessage() {
@@ -78,42 +101,99 @@ struct ChatView: View {
 // MARK: - 메시지 말풍선
 struct MessageBubble: View {
     let message: Message
+    let screenHeight: CGFloat
+    let senderName: String
+
+    @State private var bubblePosition: CGFloat = 0.5
+
+    // 그라데이션 색상: 위 = 보라, 아래 = 파랑
+    private static let topColor = Color(red: 0.6, green: 0.2, blue: 0.9)     // 보라
+    private static let bottomColor = Color(red: 0.2, green: 0.4, blue: 0.95) // 파랑
+
+    private var bubbleGradient: LinearGradient {
+        let clampedPosition = max(0, min(1, bubblePosition))
+
+        // 화면 위치에 따라 보라 ↔ 파랑 사이 색상 계산
+        let color = interpolateColor(from: Self.topColor, to: Self.bottomColor, progress: clampedPosition)
+
+        return LinearGradient(
+            colors: [color, color.opacity(0.9)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private func interpolateColor(from: Color, to: Color, progress: CGFloat) -> Color {
+        let fromUI = UIColor(from)
+        let toUI = UIColor(to)
+
+        var fromR: CGFloat = 0, fromG: CGFloat = 0, fromB: CGFloat = 0, fromA: CGFloat = 0
+        var toR: CGFloat = 0, toG: CGFloat = 0, toB: CGFloat = 0, toA: CGFloat = 0
+
+        fromUI.getRed(&fromR, green: &fromG, blue: &fromB, alpha: &fromA)
+        toUI.getRed(&toR, green: &toG, blue: &toB, alpha: &toA)
+
+        let r = fromR + (toR - fromR) * progress
+        let g = fromG + (toG - fromG) * progress
+        let b = fromB + (toB - fromB) * progress
+
+        return Color(red: r, green: g, blue: b)
+    }
 
     var body: some View {
-        HStack {
+        HStack(alignment: .bottom, spacing: 8) {
             if message.isFromUser {
-                Spacer()
+                Spacer(minLength: 60)
+            } else {
+                // 상대방 프로필 이미지
+                Circle()
+                    .fill(Color.blue)
+                    .frame(width: 28, height: 28)
+                    .overlay(
+                        Text(String(senderName.prefix(1)))
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    )
             }
 
-            VStack(alignment: message.isFromUser ? .trailing : .leading, spacing: 4) {
-                Text(message.content)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(message.isFromUser ? Color.blue : Color(.systemGray5))
-                    .foregroundColor(message.isFromUser ? .white : .primary)
-                    .cornerRadius(18)
-
-                Text(formatTime(message.timestamp))
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
+            Text(message.content)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    GeometryReader { geometry in
+                        Group {
+                            if message.isFromUser {
+                                bubbleGradient
+                            } else {
+                                Color(.systemGray5)
+                            }
+                        }
+                        .onAppear {
+                            updatePosition(geometry: geometry)
+                        }
+                        .onChange(of: geometry.frame(in: .global).midY) { _, _ in
+                            updatePosition(geometry: geometry)
+                        }
+                    }
+                )
+                .foregroundColor(message.isFromUser ? .white : .primary)
+                .cornerRadius(18)
 
             if !message.isFromUser {
-                Spacer()
+                Spacer(minLength: 60)
             }
         }
     }
 
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "a h:mm"
-        formatter.locale = Locale(identifier: "ko_KR")
-        return formatter.string(from: date)
+    private func updatePosition(geometry: GeometryProxy) {
+        let frame = geometry.frame(in: .global)
+        bubblePosition = frame.midY / screenHeight
     }
 }
 
 #Preview {
-    NavigationView {
+    NavigationStack {
         ChatView(itemId: UUID())
     }
 }

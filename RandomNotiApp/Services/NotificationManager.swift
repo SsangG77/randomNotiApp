@@ -6,6 +6,7 @@
 import Foundation
 import UserNotifications
 import Combine
+import UIKit
 
 class NotificationManager: NSObject, ObservableObject {
     static let shared = NotificationManager()
@@ -19,10 +20,16 @@ class NotificationManager: NSObject, ObservableObject {
     private let userDefaults = UserDefaults.standard
     private let itemsKey = "notificationItems"
 
+    // 전체 읽지 않은 메시지 수
+    var totalUnreadCount: Int {
+        items.reduce(0) { $0 + $1.unreadCount }
+    }
+
     override init() {
         super.init()
         loadItems()
         UNUserNotificationCenter.current().delegate = self
+        updateBadge()
     }
 
     // MARK: - 권한 요청
@@ -128,13 +135,16 @@ class NotificationManager: NSObject, ObservableObject {
                 )
                 items[idx].messages.append(aiMessage)
                 items[idx].isWaitingForReply = true
+                items[idx].unreadCount += 1
+                updateBadge()
             }
 
             // 알림 내용 설정
             let content = UNMutableNotificationContent()
-            content.title = items[index].title
+            content.title = self.items[index].title
             content.body = messageContent
             content.sound = .default
+            content.badge = NSNumber(value: self.totalUnreadCount)
 
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
             let request = UNNotificationRequest(
@@ -174,6 +184,21 @@ class NotificationManager: NSObject, ObservableObject {
         for item in items where item.isEnabled && !item.isWaitingForReply {
             scheduleNextNotification(for: item.id)
         }
+        updateBadge()
+    }
+
+    // MARK: - 뱃지 관리
+    func updateBadge() {
+        DispatchQueue.main.async {
+            UNUserNotificationCenter.current().setBadgeCount(self.totalUnreadCount)
+        }
+    }
+
+    // 채팅 읽음 처리
+    func markAsRead(itemId: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+        items[index].unreadCount = 0
+        updateBadge()
     }
 }
 
