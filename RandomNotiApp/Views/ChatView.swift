@@ -25,9 +25,9 @@ struct ChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 채팅 메시지 목록
-            ScrollViewReader { proxy in
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                // 채팅 메시지 목록
                 GeometryReader { outerGeometry in
                     let screenHeight = outerGeometry.size.height
 
@@ -46,44 +46,50 @@ struct ChatView: View {
                     }
                 }
                 .onChange(of: visibleMessages.count) { _, _ in
-                    if let lastMessage = visibleMessages.last {
-                        withAnimation {
-                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                        }
+                    scrollToBottom(proxy: proxy)
+                }
+
+                Divider()
+
+                // 입력 영역
+                HStack(spacing: 12) {
+                    TextField("메시지 입력...", text: $inputText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(20)
+                        .lineLimit(1...5)
+                        .focused($isInputFocused)
+
+                    Button(action: sendMessage) {
+                        Image(systemName: "paperplane.fill")
+                            .font(.title2)
+                            .foregroundColor(inputText.isEmpty ? .gray : .blue)
+                    }
+                    .disabled(inputText.isEmpty)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color(.systemBackground))
+            }
+            .onChange(of: isInputFocused) { _, focused in
+                if focused {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        scrollToBottom(proxy: proxy)
                     }
                 }
             }
-
-            Divider()
-
-            // 입력 영역
-            HStack(spacing: 12) {
-                TextField("메시지 입력...", text: $inputText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .padding(10)
-                    .background(Color(.systemGray6))
-                    .cornerRadius(20)
-                    .lineLimit(1...5)
-                    .focused($isInputFocused)
-
-                Button(action: sendMessage) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.title2)
-                        .foregroundColor(inputText.isEmpty ? .gray : .blue)
+            .onAppear {
+                manager.markAsRead(itemId: itemId)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    scrollToBottom(proxy: proxy)
                 }
-                .disabled(inputText.isEmpty)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(Color(.systemBackground))
         }
         .navigationTitle(item?.title ?? "채팅")
         .navigationBarTitleDisplayMode(.inline)
         .onTapGesture {
             isInputFocused = false
-        }
-        .onAppear {
-            manager.markAsRead(itemId: itemId)
         }
         .onReceive(timer) { _ in
             currentTime = Date()
@@ -95,6 +101,14 @@ struct ChatView: View {
 
         manager.sendUserMessage(inputText, for: item.id)
         inputText = ""
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        if let lastMessage = visibleMessages.last {
+            withAnimation {
+                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+            }
+        }
     }
 }
 

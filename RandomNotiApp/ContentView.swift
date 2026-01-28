@@ -102,29 +102,15 @@ struct NotificationRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             // 프로필 아이콘
-            ZStack(alignment: .topTrailing) {
-                Circle()
-                    .fill(item.isEnabled ? Color.blue : Color.gray)
-                    .frame(width: 50, height: 50)
-                    .overlay(
-                        Text(String(item.title.prefix(1)))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                    )
-
-                // 읽지 않은 메시지 뱃지
-                if item.unreadCount > 0 {
-                    Text("\(item.unreadCount)")
-                        .font(.caption2)
+            Circle()
+                .fill(item.isEnabled ? Color.blue : Color.gray)
+                .frame(width: 50, height: 50)
+                .overlay(
+                    Text(String(item.title.prefix(1)))
+                        .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                        .padding(5)
-                        .background(Color.red)
-                        .clipShape(Circle())
-                        .offset(x: 5, y: -5)
-                }
-            }
+                )
 
             // 정보
             VStack(alignment: .leading, spacing: 4) {
