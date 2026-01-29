@@ -71,7 +71,18 @@ class NotificationManager: NSObject, ObservableObject {
 
     func updateItem(_ item: NotificationItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
+            let oldItem = items[index]
             items[index] = item
+
+            // 간격이 변경되었고 활성화 상태면 알림 재예약
+            if (oldItem.minInterval != item.minInterval || oldItem.maxInterval != item.maxInterval) && item.isEnabled {
+                // 기존 알림 취소
+                cancelNotifications(for: item.id)
+                // pendingMessage 삭제하고 새 간격으로 다시 예약
+                items[index].pendingMessage = nil
+                items[index].isWaitingForReply = false
+                scheduleNextNotification(for: item.id)
+            }
         }
     }
 
@@ -159,6 +170,9 @@ class NotificationManager: NSObject, ObservableObject {
         guard let index = items.firstIndex(where: { $0.id == itemId }),
               let pending = items[index].pendingMessage else { return }
 
+        // UI 업데이트 보장
+        objectWillChange.send()
+
         let message = Message(
             content: pending.content,
             isFromUser: false,
@@ -205,6 +219,7 @@ class NotificationManager: NSObject, ObservableObject {
     // 시간이 지난 pendingMessage들을 채팅에 추가
     private func processPendingMessages() {
         let now = Date()
+        var hasChanges = false
         for index in items.indices {
             if let pending = items[index].pendingMessage,
                pending.scheduledTime <= now {
@@ -216,7 +231,11 @@ class NotificationManager: NSObject, ObservableObject {
                 items[index].messages.append(message)
                 items[index].pendingMessage = nil
                 items[index].unreadCount += 1
+                hasChanges = true
             }
+        }
+        if hasChanges {
+            objectWillChange.send()
         }
     }
 
