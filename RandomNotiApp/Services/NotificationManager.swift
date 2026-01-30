@@ -94,12 +94,48 @@ class NotificationManager: NSObject, ObservableObject {
     func toggleItem(_ item: NotificationItem) {
         if let index = items.firstIndex(where: { $0.id == item.id }) {
             items[index].isEnabled.toggle()
-            if items[index].isEnabled && !items[index].isWaitingForReply {
-                scheduleNextNotification(for: items[index].id)
+
+            if items[index].isEnabled {
+                // 활성화: pendingMessage가 있으면 알림 재예약
+                if let pending = items[index].pendingMessage {
+                    let now = Date()
+                    if pending.scheduledTime > now {
+                        // 아직 시간이 안 됐으면 남은 시간으로 알림 재예약
+                        let remainingSeconds = pending.scheduledTime.timeIntervalSince(now)
+                        rescheduleNotification(for: items[index].id, content: pending.content, seconds: remainingSeconds)
+                    } else {
+                        // 시간이 지났으면 바로 메시지 추가
+                        deliverPendingMessage(for: items[index].id)
+                    }
+                } else if !items[index].isWaitingForReply {
+                    // pendingMessage가 없고 답변 대기 중이 아니면 새 알림 예약
+                    scheduleNextNotification(for: items[index].id)
+                }
             } else {
+                // 비활성화: 알림 취소
                 cancelNotifications(for: items[index].id)
             }
         }
+    }
+
+    // 기존 pendingMessage로 알림 재예약
+    private func rescheduleNotification(for itemId: UUID, content: String, seconds: TimeInterval) {
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+
+        let notificationContent = UNMutableNotificationContent()
+        notificationContent.title = items[index].title
+        notificationContent.body = content
+        notificationContent.sound = .default
+        notificationContent.badge = NSNumber(value: totalUnreadCount + 1)
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, seconds), repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "\(itemId.uuidString)-0",
+            content: notificationContent,
+            trigger: trigger
+        )
+
+        UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: - 사용자 메시지 전송
@@ -131,24 +167,28 @@ class NotificationManager: NSObject, ObservableObject {
         // 랜덤 간격 계산 (분 -> 초)
         let randomMinutes = Int.random(in: items[index].minInterval...items[index].maxInterval)
         let seconds = TimeInterval(randomMinutes * 60)
+        let itemTitle = items[index].title
 
         // AI 메시지 생성
         Task {
             let messageContent = await generateAIMessage(for: items[index])
 
-            await MainActor.run {
-                // pendingMessage에 저장 (아직 채팅에 추가하지 않음)
-                guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return }
+            // pendingMessage 저장 및 알림 예약
+            let shouldSchedule = await MainActor.run { () -> Bool in
+                guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return false }
                 items[idx].pendingMessage = PendingMessage(
                     content: messageContent,
                     scheduledTime: Date().addingTimeInterval(seconds)
                 )
                 items[idx].isWaitingForReply = true
+                return true
             }
+
+            guard shouldSchedule else { return }
 
             // 알림 내용 설정
             let content = UNMutableNotificationContent()
-            content.title = self.items[index].title
+            content.title = itemTitle
             content.body = messageContent
             content.sound = .default
             content.badge = NSNumber(value: self.totalUnreadCount + 1)
@@ -161,7 +201,7 @@ class NotificationManager: NSObject, ObservableObject {
             )
 
             try? await UNUserNotificationCenter.current().add(request)
-            print("\(items[index].title): \(randomMinutes)분 후 알림 예약")
+            print("\(itemTitle): \(randomMinutes)분 후 알림 예약")
         }
     }
 
