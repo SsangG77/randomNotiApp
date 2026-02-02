@@ -161,17 +161,18 @@ class NotificationManager: NSObject, ObservableObject {
               items[index].isEnabled,
               !items[index].isWaitingForReply else { return }
 
-        // 기존 알림 취소
-        cancelNotifications(for: itemId)
-
         // 랜덤 간격 계산 (분 -> 초)
         let randomMinutes = Int.random(in: items[index].minInterval...items[index].maxInterval)
         let seconds = TimeInterval(randomMinutes * 60)
         let itemTitle = items[index].title
+        let itemData = items[index]
 
-        // AI 메시지 생성
+        // AI 메시지 생성 및 알림 예약
         Task {
-            let messageContent = await generateAIMessage(for: items[index])
+            // 기존 알림 취소 (완료될 때까지 대기)
+            await cancelNotificationsAsync(for: itemId)
+
+            let messageContent = await generateAIMessage(for: itemData)
 
             // pendingMessage 저장 및 알림 예약
             let shouldSchedule = await MainActor.run { () -> Bool in
@@ -237,11 +238,17 @@ class NotificationManager: NSObject, ObservableObject {
     }
 
     func cancelNotifications(for itemId: UUID) {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            let identifiersToRemove = requests
-                .filter { $0.identifier.hasPrefix(itemId.uuidString) }
-                .map { $0.identifier }
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
+        Task {
+            await cancelNotificationsAsync(for: itemId)
+        }
+    }
+
+    private func cancelNotificationsAsync(for itemId: UUID) async {
+        let requests = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        let identifiersToRemove = requests
+            .filter { $0.identifier.hasPrefix(itemId.uuidString) }
+            .map { $0.identifier }
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
         }
     }
 
