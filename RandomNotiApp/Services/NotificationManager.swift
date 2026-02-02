@@ -249,7 +249,6 @@ class NotificationManager: NSObject, ObservableObject {
             .filter { $0.identifier.hasPrefix(itemId.uuidString) }
             .map { $0.identifier }
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiersToRemove)
-        }
     }
 
     // 앱 시작 시 대기 중이 아닌 아이템들 알림 재스케줄링
