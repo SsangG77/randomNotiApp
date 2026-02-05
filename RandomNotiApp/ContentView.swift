@@ -35,10 +35,23 @@ struct ContentView: View {
             .sheet(item: $editingItem) { item in
                 NotificationEditView(mode: .edit(item))
             }
+            // 알림 탭 시 해당 채팅방으로 자동 이동
+            .background(
+                NavigationLink(
+                    destination: Group {
+                        if let itemId = manager.navigateToItemId {
+                            ChatView(itemId: itemId)
+                        }
+                    },
+                    isActive: Binding(
+                        get: { manager.navigateToItemId != nil },
+                        set: { if !$0 { manager.navigateToItemId = nil } }
+                    )
+                ) { EmptyView() }
+            )
         }
         .onAppear {
             manager.requestPermission()
-            manager.rescheduleAllNotifications()
         }
     }
 
@@ -84,6 +97,9 @@ struct NotificationRowView: View {
 
     private var lastMessageText: String {
         if let lastMessage = item.messages.last {
+            if lastMessage.isLoading {
+                return "메시지 작성중..."
+            }
             return lastMessage.isFromUser ? "나: \(lastMessage.content)" : lastMessage.content
         }
         return "대화를 시작해보세요"

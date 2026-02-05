@@ -22,6 +22,7 @@ struct NotificationEditView: View {
     @State private var isEnabled: Bool = true
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var profileImageData: Data?
+    @FocusState private var isNameFocused: Bool
 
     private var isEditing: Bool {
         if case .edit = mode { return true }
@@ -75,6 +76,7 @@ struct NotificationEditView: View {
                     .padding(.vertical, 8)
 
                     TextField("이름 (예: 민지)", text: $title)
+                        .focused($isNameFocused)
                 }
 
                 Section {
@@ -144,6 +146,9 @@ struct NotificationEditView: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
+            .onTapGesture {
+                isNameFocused = false
+            }
         }
     }
 

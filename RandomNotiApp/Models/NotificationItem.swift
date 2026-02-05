@@ -7,8 +7,23 @@ import Foundation
 
 // 예약된 메시지 (아직 채팅에 추가되지 않음)
 struct PendingMessage: Codable {
-    var content: String
+    var content: String?    // nil: AI 생성 대기, non-nil: 레거시 호환용
     var scheduledTime: Date
+
+    enum CodingKeys: String, CodingKey {
+        case content, scheduledTime
+    }
+
+    init(scheduledTime: Date) {
+        self.content = nil
+        self.scheduledTime = scheduledTime
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        content = try container.decodeIfPresent(String.self, forKey: .content)
+        scheduledTime = try container.decode(Date.self, forKey: .scheduledTime)
+    }
 }
 
 struct NotificationItem: Identifiable, Codable {

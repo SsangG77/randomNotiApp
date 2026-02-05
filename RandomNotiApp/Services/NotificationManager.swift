@@ -19,6 +19,8 @@ class NotificationManager: NSObject, ObservableObject {
 
     private let userDefaults = UserDefaults.standard
     private let itemsKey = "notificationItems"
+    private var generatingMessageIds = Set<UUID>()  // AI 생성 중복 방지
+    @Published var navigateToItemId: UUID?           // 알림 탭 시 채팅방 이동용
 
     // 전체 읽지 않은 메시지 수
     var totalUnreadCount: Int {
@@ -102,7 +104,7 @@ class NotificationManager: NSObject, ObservableObject {
                     if pending.scheduledTime > now {
                         // 아직 시간이 안 됐으면 남은 시간으로 알림 재예약
                         let remainingSeconds = pending.scheduledTime.timeIntervalSince(now)
-                        rescheduleNotification(for: items[index].id, content: pending.content, seconds: remainingSeconds)
+                        rescheduleNotification(for: items[index].id, seconds: remainingSeconds)
                     } else {
                         // 시간이 지났으면 바로 메시지 추가
                         deliverPendingMessage(for: items[index].id)
@@ -119,12 +121,12 @@ class NotificationManager: NSObject, ObservableObject {
     }
 
     // 기존 pendingMessage로 알림 재예약
-    private func rescheduleNotification(for itemId: UUID, content: String, seconds: TimeInterval) {
+    private func rescheduleNotification(for itemId: UUID, seconds: TimeInterval) {
         guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
 
         let notificationContent = UNMutableNotificationContent()
         notificationContent.title = items[index].title
-        notificationContent.body = content
+        notificationContent.body = "새로운 메시지가 도착했어요"
         notificationContent.sound = .default
         notificationContent.badge = NSNumber(value: totalUnreadCount + 1)
 
@@ -155,74 +157,92 @@ class NotificationManager: NSObject, ObservableObject {
         }
     }
 
-    // MARK: - 알림 스케줄링 (한 번에 하나씩)
+    // MARK: - 알림 스케줄링 (동기, 백그라운드 안전)
     private func scheduleNextNotification(for itemId: UUID) {
         guard let index = items.firstIndex(where: { $0.id == itemId }),
               items[index].isEnabled,
               !items[index].isWaitingForReply else { return }
 
         // 랜덤 간격 계산 (분 -> 초)
+        // (같은 identifier로 add하면 iOS가 기존 알림을 자동 교체)
         let randomMinutes = Int.random(in: items[index].minInterval...items[index].maxInterval)
         let seconds = TimeInterval(randomMinutes * 60)
-        let itemTitle = items[index].title
-        let itemData = items[index]
 
-        // AI 메시지 생성 및 알림 예약
-        Task {
-            // 기존 알림 취소 (완료될 때까지 대기)
-            await cancelNotificationsAsync(for: itemId)
+        // pendingMessage 저장 (AI 컨텐츠 없이 스케줄 시간만)
+        items[index].pendingMessage = PendingMessage(scheduledTime: Date().addingTimeInterval(seconds))
+        items[index].isWaitingForReply = true
 
-            let messageContent = await generateAIMessage(for: itemData)
+        // iOS 알림 즉시 등록 (동기)
+        let content = UNMutableNotificationContent()
+        content.title = items[index].title
+        content.body = "새로운 메시지가 도착했어요"
+        content.sound = .default
+        content.badge = NSNumber(value: totalUnreadCount + 1)
 
-            // pendingMessage 저장 및 알림 예약
-            let shouldSchedule = await MainActor.run { () -> Bool in
-                guard let idx = items.firstIndex(where: { $0.id == itemId }) else { return false }
-                items[idx].pendingMessage = PendingMessage(
-                    content: messageContent,
-                    scheduledTime: Date().addingTimeInterval(seconds)
-                )
-                items[idx].isWaitingForReply = true
-                return true
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
+        let request = UNNotificationRequest(
+            identifier: "\(itemId.uuidString)-0",
+            content: content,
+            trigger: trigger
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("알림 예약 실패: \(error)")
             }
-
-            guard shouldSchedule else { return }
-
-            // 알림 내용 설정
-            let content = UNMutableNotificationContent()
-            content.title = itemTitle
-            content.body = messageContent
-            content.sound = .default
-            content.badge = NSNumber(value: self.totalUnreadCount + 1)
-
-            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)
-            let request = UNNotificationRequest(
-                identifier: "\(itemId.uuidString)-0",
-                content: content,
-                trigger: trigger
-            )
-
-            try? await UNUserNotificationCenter.current().add(request)
-            print("\(itemTitle): \(randomMinutes)분 후 알림 예약")
         }
+        print("\(items[index].title): \(randomMinutes)분 후 알림 예약")
     }
 
-    // MARK: - 예약된 메시지를 채팅에 추가
+    // MARK: - 예약된 메시지를 채팅에 추가 (로딩 버블 + AI 생성)
     func deliverPendingMessage(for itemId: UUID) {
         guard let index = items.firstIndex(where: { $0.id == itemId }),
               let pending = items[index].pendingMessage else { return }
 
-        // UI 업데이트 보장
         objectWillChange.send()
 
-        let message = Message(
-            content: pending.content,
-            isFromUser: false,
-            timestamp: Date()
-        )
-        items[index].messages.append(message)
+        // 레거시: 이미 content가 있으면 바로 전달
+        if let content = pending.content, !content.isEmpty {
+            let message = Message(content: content, isFromUser: false, timestamp: Date())
+            items[index].messages.append(message)
+            items[index].pendingMessage = nil
+            items[index].unreadCount += 1
+            updateBadge()
+            return
+        }
+
+        // 새 플로우: 로딩 메시지 생성 후 AI 생성 트리거
+        let loadingMessage = Message(content: "", isFromUser: false, timestamp: Date(), isLoading: true)
+        let messageId = loadingMessage.id
+        items[index].messages.append(loadingMessage)
         items[index].pendingMessage = nil
         items[index].unreadCount += 1
         updateBadge()
+
+        let itemData = items[index]
+        generateAndReplaceMessage(itemId: itemId, messageId: messageId, itemData: itemData)
+    }
+
+    // MARK: - AI 메시지 생성 후 로딩 메시지 교체 (포그라운드)
+    private func generateAndReplaceMessage(itemId: UUID, messageId: UUID, itemData: NotificationItem) {
+        // 이미 생성 중이면 중복 실행 방지
+        guard !generatingMessageIds.contains(messageId) else { return }
+        generatingMessageIds.insert(messageId)
+
+        Task {
+            let content = await generateAIMessage(for: itemData)
+
+            await MainActor.run {
+                generatingMessageIds.remove(messageId)
+                guard let itemIndex = items.firstIndex(where: { $0.id == itemId }),
+                      let msgIndex = items[itemIndex].messages.firstIndex(where: { $0.id == messageId })
+                else { return }
+
+                objectWillChange.send()
+                items[itemIndex].messages[msgIndex].content = content
+                items[itemIndex].messages[msgIndex].isLoading = false
+            }
+        }
     }
 
     // MARK: - AI 메시지 생성
@@ -253,6 +273,9 @@ class NotificationManager: NSObject, ObservableObject {
 
     // 앱 시작 시 대기 중이 아닌 아이템들 알림 재스케줄링
     func rescheduleAllNotifications() {
+        // 이전 세션에서 로딩 중이던 메시지 복구
+        recoverStaleLoadingMessages()
+
         // 시간이 지난 pendingMessage 처리
         processPendingMessages()
 
@@ -262,6 +285,20 @@ class NotificationManager: NSObject, ObservableObject {
         updateBadge()
     }
 
+    // 앱 재시작 시 isLoading 상태로 남아있는 메시지 AI 재생성
+    private func recoverStaleLoadingMessages() {
+        for index in items.indices {
+            for msgIndex in items[index].messages.indices {
+                if items[index].messages[msgIndex].isLoading {
+                    let messageId = items[index].messages[msgIndex].id
+                    let itemId = items[index].id
+                    let itemData = items[index]
+                    generateAndReplaceMessage(itemId: itemId, messageId: messageId, itemData: itemData)
+                }
+            }
+        }
+    }
+
     // 시간이 지난 pendingMessage들을 채팅에 추가
     private func processPendingMessages() {
         let now = Date()
@@ -269,15 +306,37 @@ class NotificationManager: NSObject, ObservableObject {
         for index in items.indices {
             if let pending = items[index].pendingMessage,
                pending.scheduledTime <= now {
-                let message = Message(
-                    content: pending.content,
+
+                // 레거시: content가 있으면 바로 전달
+                if let content = pending.content, !content.isEmpty {
+                    let message = Message(
+                        content: content,
+                        isFromUser: false,
+                        timestamp: pending.scheduledTime
+                    )
+                    items[index].messages.append(message)
+                    items[index].pendingMessage = nil
+                    items[index].unreadCount += 1
+                    hasChanges = true
+                    continue
+                }
+
+                // 새 플로우: 로딩 메시지 생성 + AI 생성 트리거
+                let loadingMessage = Message(
+                    content: "",
                     isFromUser: false,
-                    timestamp: pending.scheduledTime
+                    timestamp: pending.scheduledTime,
+                    isLoading: true
                 )
-                items[index].messages.append(message)
+                let messageId = loadingMessage.id
+                let itemId = items[index].id
+                items[index].messages.append(loadingMessage)
                 items[index].pendingMessage = nil
                 items[index].unreadCount += 1
                 hasChanges = true
+
+                let itemData = items[index]
+                generateAndReplaceMessage(itemId: itemId, messageId: messageId, itemData: itemData)
             }
         }
         if hasChanges {
@@ -312,6 +371,7 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         if let itemId = extractItemId(from: identifier) {
             DispatchQueue.main.async {
                 self.deliverPendingMessage(for: itemId)
+                self.navigateToItemId = itemId
             }
         }
         completionHandler()

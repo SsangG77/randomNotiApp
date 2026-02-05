@@ -175,28 +175,36 @@ struct MessageBubble: View {
                 }
             }
 
-            Text(message.content)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    GeometryReader { geometry in
-                        Group {
-                            if message.isFromUser {
-                                bubbleGradient
-                            } else {
-                                Color(.systemGray5)
-                            }
-                        }
-                        .onAppear {
-                            updatePosition(geometry: geometry)
-                        }
-                        .onChange(of: geometry.frame(in: .global).midY) { _, _ in
-                            updatePosition(geometry: geometry)
+            Group {
+                if message.isLoading {
+                    TypingIndicatorView()
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 14)
+                } else {
+                    Text(message.content)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                }
+            }
+            .background(
+                GeometryReader { geometry in
+                    Group {
+                        if message.isFromUser {
+                            bubbleGradient
+                        } else {
+                            Color(.systemGray5)
                         }
                     }
-                )
-                .foregroundColor(message.isFromUser ? .white : .primary)
-                .cornerRadius(18)
+                    .onAppear {
+                        updatePosition(geometry: geometry)
+                    }
+                    .onChange(of: geometry.frame(in: .global).midY) { _, _ in
+                        updatePosition(geometry: geometry)
+                    }
+                }
+            )
+            .foregroundColor(message.isFromUser ? .white : .primary)
+            .cornerRadius(18)
 
             if !message.isFromUser {
                 Spacer(minLength: 60)
@@ -207,6 +215,29 @@ struct MessageBubble: View {
     private func updatePosition(geometry: GeometryProxy) {
         let frame = geometry.frame(in: .global)
         bubblePosition = frame.midY / screenHeight
+    }
+}
+
+// MARK: - 타이핑 인디케이터 (로딩 점 애니메이션)
+struct TypingIndicatorView: View {
+    @State private var dotIndex = 0
+
+    private let timer = Timer.publish(every: 0.4, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(Color.gray)
+                    .frame(width: 7, height: 7)
+                    .opacity(index == dotIndex ? 1.0 : 0.3)
+            }
+        }
+        .onReceive(timer) { _ in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                dotIndex = (dotIndex + 1) % 3
+            }
+        }
     }
 }
 
