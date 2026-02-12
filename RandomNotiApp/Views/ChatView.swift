@@ -11,6 +11,7 @@ struct ChatView: View {
     @ObservedObject private var manager = NotificationManager.shared
     @State private var inputText: String = ""
     @FocusState private var isInputFocused: Bool
+    @Environment(\.dismiss) private var dismiss
 
     private var item: NotificationItem? {
         manager.items.first { $0.id == itemId }
@@ -23,6 +24,15 @@ struct ChatView: View {
     var body: some View {
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
+                // 인스타그램 스타일 커스텀 헤더
+                ChatHeaderView(
+                    title: item?.title ?? "채팅",
+                    profileImageData: item?.profileImageData,
+                    onBackTapped: { dismiss() }
+                )
+
+                Divider()
+
                 // 채팅 메시지 목록
                 GeometryReader { outerGeometry in
                     let screenHeight = outerGeometry.size.height
@@ -83,8 +93,8 @@ struct ChatView: View {
                 }
             }
         }
-        .navigationTitle(item?.title ?? "채팅")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .onTapGesture {
             isInputFocused = false
         }
@@ -103,6 +113,104 @@ struct ChatView: View {
                 proxy.scrollTo(lastMessage.id, anchor: .bottom)
             }
         }
+    }
+}
+
+// MARK: - 인스타그램 스타일 채팅 헤더
+struct ChatHeaderView: View {
+    let title: String
+    let profileImageData: Data?
+    let onBackTapped: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // 뒤로가기 버튼
+            Button(action: onBackTapped) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 25, weight: .medium))
+                    .foregroundColor(.primary)
+            }
+
+            // 프로필 이미지 + 이름
+            HStack(spacing: 10) {
+                // 스토리 링 그라데이션 테두리
+                ZStack {
+                    // 그라데이션 링 (인스타그램 스타일)
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color(hex: "7638FA"), location: 0.0),
+                                    .init(color: Color(hex: "D300C5"), location: 0.1),
+                                    .init(color: Color(hex: "FF0069"), location: 0.5),
+                                    .init(color: Color(hex: "FF7A00"), location: 0.7),
+                                    .init(color: Color(hex: "FFD600"), location: 1.0)
+                                ],
+                                startPoint: .topTrailing,
+                                endPoint: .bottomLeading
+                            ),
+                            lineWidth: 2.0
+                        )
+                        .frame(width: 38, height: 38)
+
+                    // 흰색 간격 (배경과 프로필 사이)
+                    Circle()
+                        .fill(Color(.systemBackground))
+                        .frame(width: 32, height: 32)
+
+                    // 프로필 이미지
+                    if let imageData = profileImageData,
+                       let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 32, height: 32)
+                            .clipShape(Circle())
+                    } else {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [.purple, .pink, .orange],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Text(String(title.prefix(1)))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.white)
+                            )
+                    }
+                }
+
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+            }
+            .padding(.leading, 6)
+
+            Spacer()
+
+            // 우측 액션 버튼들
+            HStack(spacing: 20) {
+                Button(action: {}) {
+                    Image(systemName: "phone")
+                        .font(.system(size: 23))
+                        .foregroundColor(.primary)
+                }
+
+                Button(action: {}) {
+                    Image(systemName: "video")
+                        .font(.system(size: 23))
+                        .foregroundColor(.primary)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color(.systemBackground))
     }
 }
 
@@ -238,6 +346,27 @@ struct TypingIndicatorView: View {
                 dotIndex = (dotIndex + 1) % 3
             }
         }
+    }
+}
+
+// MARK: - Color Hex Extension
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r, g, b: UInt64
+        switch hex.count {
+        case 6:
+            (r, g, b) = ((int >> 16) & 0xFF, (int >> 8) & 0xFF, int & 0xFF)
+        default:
+            (r, g, b) = (0, 0, 0)
+        }
+        self.init(
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255
+        )
     }
 }
 
