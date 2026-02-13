@@ -230,17 +230,68 @@ class NotificationManager: NSObject, ObservableObject {
         generatingMessageIds.insert(messageId)
 
         Task {
-            let content = await generateAIMessage(for: itemData)
+            // 25% 확률로 두 개의 메시지 보내기
+            let shouldSendDouble = Int.random(in: 1...4) == 1
 
-            await MainActor.run {
-                generatingMessageIds.remove(messageId)
-                guard let itemIndex = items.firstIndex(where: { $0.id == itemId }),
-                      let msgIndex = items[itemIndex].messages.firstIndex(where: { $0.id == messageId })
-                else { return }
+            if shouldSendDouble {
+                // 첫 번째 메시지: 짧은 반응
+                let shortReactions = [
+                    "ㅋㅋㅋㅋ", "ㅋㅋㅋㅋㅋㅋ", "ㅎㅎㅎ", "아ㅋㅋㅋ",
+                    "헐ㅋㅋ", "ㅋㅋ", "ㅎㅎ", "아 ㅋㅋㅋㅋ",
+                    "엥ㅋㅋ", "오ㅋㅋㅋ", "아니ㅋㅋㅋ", "잠만ㅋㅋ"
+                ]
+                let shortMessage = shortReactions.randomElement() ?? "ㅋㅋㅋㅋ"
 
-                objectWillChange.send()
-                items[itemIndex].messages[msgIndex].content = content
-                items[itemIndex].messages[msgIndex].isLoading = false
+                await MainActor.run {
+                    guard let itemIndex = items.firstIndex(where: { $0.id == itemId }),
+                          let msgIndex = items[itemIndex].messages.firstIndex(where: { $0.id == messageId })
+                    else { return }
+
+                    objectWillChange.send()
+                    items[itemIndex].messages[msgIndex].content = shortMessage
+                    items[itemIndex].messages[msgIndex].isLoading = false
+                }
+
+                // 잠시 대기 후 두 번째 메시지 추가
+                try? await Task.sleep(nanoseconds: UInt64.random(in: 500_000_000...1_500_000_000))
+
+                // 두 번째 로딩 메시지 추가
+                let secondLoadingMessage = Message(content: "", isFromUser: false, timestamp: Date(), isLoading: true)
+                let secondMessageId = secondLoadingMessage.id
+
+                await MainActor.run {
+                    guard let itemIndex = items.firstIndex(where: { $0.id == itemId }) else { return }
+                    objectWillChange.send()
+                    items[itemIndex].messages.append(secondLoadingMessage)
+                }
+
+                // 두 번째 메시지 AI 생성
+                let content = await generateAIMessage(for: itemData)
+
+                await MainActor.run {
+                    generatingMessageIds.remove(messageId)
+                    guard let itemIndex = items.firstIndex(where: { $0.id == itemId }),
+                          let msgIndex = items[itemIndex].messages.firstIndex(where: { $0.id == secondMessageId })
+                    else { return }
+
+                    objectWillChange.send()
+                    items[itemIndex].messages[msgIndex].content = content
+                    items[itemIndex].messages[msgIndex].isLoading = false
+                }
+            } else {
+                // 일반적인 경우: 하나의 메시지만
+                let content = await generateAIMessage(for: itemData)
+
+                await MainActor.run {
+                    generatingMessageIds.remove(messageId)
+                    guard let itemIndex = items.firstIndex(where: { $0.id == itemId }),
+                          let msgIndex = items[itemIndex].messages.firstIndex(where: { $0.id == messageId })
+                    else { return }
+
+                    objectWillChange.send()
+                    items[itemIndex].messages[msgIndex].content = content
+                    items[itemIndex].messages[msgIndex].isLoading = false
+                }
             }
         }
     }

@@ -56,26 +56,95 @@ struct ChatView: View {
                     scrollToBottom(proxy: proxy)
                 }
 
-                Divider()
+                // 인스타그램 스타일 입력 영역
+                HStack(spacing: 10) {
+                    // 카메라 버튼 (파란 원형)
+                    Button(action: {}) {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "6C5CE7"), Color(hex: "0984E3")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white)
+                            )
+                    }
 
-                // 입력 영역
-                HStack(spacing: 12) {
-                    TextField("메시지 입력...", text: $inputText, axis: .vertical)
+                    // 텍스트필드
+                    TextField("메시지 보내기...", text: $inputText, axis: .vertical)
                         .textFieldStyle(.plain)
-                        .padding(10)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(20)
                         .lineLimit(1...5)
                         .focused($isInputFocused)
 
-                    Button(action: sendMessage) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.title2)
-                            .foregroundColor(inputText.isEmpty ? .gray : .blue)
+                    if inputText.isEmpty {
+                        // 빈 상태: 마이크, 갤러리, 스마일
+                        HStack(spacing: 14) {
+                            Button(action: {}) {
+                                Image(systemName: "mic")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.primary)
+                            }
+                            Button(action: {}) {
+                                Image(systemName: "photo")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.primary)
+                            }
+                            Button(action: {}) {
+                                Image(systemName: "face.smiling")
+                                    .font(.system(size: 20))
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                    } else {
+                        // 텍스트 있을 때: 전송 버튼
+                        Button(action: sendMessage) {
+                            /**
+                             Circle()
+                                 .fill(
+                                     LinearGradient(
+                                         colors: [Color(hex: "6C5CE7"), Color(hex: "0984E3")],
+                                         startPoint: .topLeading,
+                                         endPoint: .bottomTrailing
+                                     )
+                                 )
+                                 .frame(width: 32, height: 32)
+                                 .overlay(
+                                     Image(systemName: "camera.fill")
+                                         .font(.system(size: 14))
+                                         .foregroundColor(.white)
+                                 )
+                             */
+                            
+                            
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "6C5CE7"), Color(hex: "0984E3")],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 52, height: 32)
+                                .overlay(
+                                    Image(systemName: "paperplane.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.white)
+                                )
+                        }
                     }
-                    .disabled(inputText.isEmpty)
                 }
-                .padding(.horizontal)
+                .padding(.leading, 4)
+                .padding(.trailing, 8)
+                .padding(.vertical, 3)
+                .background(Color(.systemGray6))
+                .cornerRadius(22)
+                .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(Color(.systemBackground))
             }
