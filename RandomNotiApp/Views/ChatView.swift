@@ -77,50 +77,55 @@ struct ChatView: View {
                     }
 
                     // 텍스트필드
-                    TextField("메시지 보내기...", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...5)
-                        .focused($isInputFocused)
+//                    TextField("메시지 보내기...", text: $inputText, axis: .vertical)
+//                        .textFieldStyle(.plain)
+//                        .lineLimit(1...5)
+//                        .focused($isInputFocused)
+                    
+                    TextField("", text: $inputText, prompt:
+                                Text("메시지 보내기...")
+                        .foregroundColor(.gray), axis: .vertical // 원하는 색상
+                    )
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...5)
+                    .focused($isInputFocused)
 
                     if inputText.isEmpty {
                         // 빈 상태: 마이크, 갤러리, 스마일
-                        HStack(spacing: 14) {
+                        HStack(spacing: 10) {
+                            let iconSize:CGFloat = 25
+                            
                             Button(action: {}) {
-                                Image(systemName: "mic")
-                                    .font(.system(size: 20))
+                                Image("mic")
+                                    .resizable()
+                                    .frame(width: iconSize, height: iconSize)
+                                    .foregroundColor(.primary)
+
+                            }
+                            Button(action: {}) {
+                                Image("image")
+                                    .resizable()
+                                    .frame(width: iconSize, height: iconSize)
                                     .foregroundColor(.primary)
                             }
                             Button(action: {}) {
-                                Image(systemName: "photo")
-                                    .font(.system(size: 20))
+                                Image("emoji")
+                                    .resizable()
+                                    .frame(width: iconSize, height: iconSize)
                                     .foregroundColor(.primary)
                             }
+                            
                             Button(action: {}) {
-                                Image(systemName: "face.smiling")
-                                    .font(.system(size: 20))
+                                Image("plus")
+                                    .resizable()
+                                    .frame(width: iconSize, height: iconSize)
                                     .foregroundColor(.primary)
                             }
                         }
+                        .padding(.trailing, 9)
                     } else {
                         // 텍스트 있을 때: 전송 버튼
                         Button(action: sendMessage) {
-                            /**
-                             Circle()
-                                 .fill(
-                                     LinearGradient(
-                                         colors: [Color(hex: "6C5CE7"), Color(hex: "0984E3")],
-                                         startPoint: .topLeading,
-                                         endPoint: .bottomTrailing
-                                     )
-                                 )
-                                 .frame(width: 32, height: 32)
-                                 .overlay(
-                                     Image(systemName: "camera.fill")
-                                         .font(.system(size: 14))
-                                         .foregroundColor(.white)
-                                 )
-                             */
-                            
                             
                             RoundedRectangle(cornerRadius: 20)
                                 .fill(
@@ -140,8 +145,8 @@ struct ChatView: View {
                     }
                 }
                 .padding(.leading, 4)
-                .padding(.trailing, 8)
-                .padding(.vertical, 3)
+                .padding(.trailing, 9)
+                .padding(.vertical, 6)
                 .background(Color(.systemGray6))
                 .cornerRadius(22)
                 .padding(.horizontal, 12)
@@ -252,10 +257,23 @@ struct ChatHeaderView: View {
                             )
                     }
                 }
+                
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 5) {
+                        Text(title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.primary)
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Text("최희진")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                }
 
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
                 
             }
             .padding(.leading, 6)
@@ -263,7 +281,7 @@ struct ChatHeaderView: View {
             Spacer()
 
             // 우측 액션 버튼들
-            HStack(spacing: 20) {
+            HStack(spacing: 27) {
                 Button(action: {}) {
                     Image(systemName: "phone")
                         .font(.system(size: 23))
@@ -277,7 +295,7 @@ struct ChatHeaderView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(Color(.systemBackground))
     }
